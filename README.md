@@ -290,6 +290,17 @@ end
 
 A cursor carries the fingerprint of the script it was created from. One stored across a content change is refused - `check_cursor/2` returns `{:error, :stale_script}` and `step/3` raises - rather than silently resuming at a statement that has shifted; restart the node in that case. The fingerprint ignores comments and blank lines, so editing those or recompiling unchanged source keeps every stored cursor valid. `check_cursor/2` also rejects a cursor whose position is corrupt or whose node no longer exists. Variables carry no such constraint.
 
+## Diagrams
+
+`Yarnspinnex.Mermaid` renders a compiled script as [Mermaid](https://mermaid.js.org/) flowchart source, for docs or a quick look at how a script hangs together. `node_graph/1` draws one box per node and one edge per `<<jump>>`. `flowchart/2` draws every statement: consecutive lines, sets, and commands share one box, options and `<<if>>` fan out on labeled edges, and `<<stop>>` or the end of a node lead to a shared terminal. Pass `nodes: ["Start", "Shop"]` to draw only those nodes.
+
+```elixir
+{:ok, script} = Yarnspinnex.compile_string(source)
+File.write!("dialogue.mmd", Yarnspinnex.Mermaid.flowchart(script))
+```
+
+Dialogue text is escaped so quotes, brackets, and Yarn's own `<<` `>>` never break the diagram.
+
 ## Not supported
 
 Detours (`<<detour>>` and `<<return>>`), `<<once>>`, enums, smart variables, and node groups from Yarn Spinner 3 are not implemented. Jump targets must be literal node names, so `<<jump $target>>` is a compile error. `visited()` and `visited_count()` are not built in; provide them as host functions over your own records. Markup inside lines is passed through rather than parsed. Writing to a field (`<<set $player.gold = 20>>`) is not valid; emit a command and apply it through your own domain function.
