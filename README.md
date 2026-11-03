@@ -55,7 +55,7 @@ Sally: Your score is {$score}. #line:0a1b2c #shout
 <<jump NextScene>>
 ```
 
-- Speaker: everything before the first `: `. Write `\:` for a literal colon that does not start a speaker.
+- Speaker: everything before the first `: `, the space is important. Write `\:` for a literal colon that does not start a speaker.
 - `#line:` tag: becomes `id` on the `Line` or `Option`, the usual localization key. Markup such as `[b]` passes through untouched.
 - Comments: `//` starts one, except inside quotes.
 - Assignment: `<<set>>` accepts `=` or `to`, plus `+= -= *= /= %=`. An `as type` annotation is accepted but not enforced.
