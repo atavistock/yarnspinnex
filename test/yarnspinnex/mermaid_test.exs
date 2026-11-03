@@ -53,7 +53,7 @@ defmodule Yarnspinnex.MermaidTest do
     lines = String.split(output, "\n")
 
     assert hd(lines) == "flowchart TD"
-    assert ~s(  subgraph n_Start["Start"]) in lines
+    assert ~s(  subgraph sg_Start["Start"]) in lines
     assert ~s(    n_Start_1["Sally: Hi there.<br/>$met = true"]) in lines
     assert ~s(    n_Start_2{{"choice"}}) in lines
     assert ~s(    n_Start_3["Sally: See you around."]) in lines
@@ -88,10 +88,21 @@ defmodule Yarnspinnex.MermaidTest do
   } do
     lines = script |> Mermaid.flowchart(nodes: ["Start"]) |> String.split("\n")
 
-    assert ~s(  subgraph n_Start["Start"]) in lines
-    refute ~s(  subgraph n_Shop["Shop"]) in lines
+    assert ~s(  subgraph sg_Start["Start"]) in lines
+    refute ~s(  subgraph sg_Shop["Shop"]) in lines
     assert ~s(  n_Shop_1["Shop"]) in lines
     assert "  n_Start_5 --> n_Shop_1" in lines
+  end
+
+  test "flowchart ids stay unique when one title extends another with a number" do
+    source = "title: A\n---\nHi\n<<jump A_1>>\n===\ntitle: A_1\n---\nBye\n===\n"
+    {:ok, script} = Yarnspinnex.compile_string(source)
+    lines = script |> Mermaid.flowchart() |> String.split("\n")
+
+    assert ~s(  subgraph sg_A_1["A_1"]) in lines
+    assert ~s(    n_A_1["Hi"]) in lines
+    assert ~s(    n_A_1_1["Bye"]) in lines
+    refute Enum.any?(lines, &String.starts_with?(&1, "  subgraph n_"))
   end
 
   test "flowchart with no edge to the terminal omits it" do

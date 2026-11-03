@@ -101,8 +101,10 @@ defmodule Yarnspinnex.Mermaid do
 
   defp entry_id(title), do: node_id(title) <> "_1"
 
+  # Statement ids are `n_<title>_<counter>`, so the subgraph takes a different prefix: a node
+  # titled `A_1` must not share an id with the first statement of node `A`.
   defp subgraph(%Node{title: title}, state) do
-    [~s(  subgraph #{node_id(title)}["#{escape(title)}"])] ++
+    [~s(  subgraph sg_#{title}["#{escape(title)}"])] ++
       Enum.reverse(state.shapes) ++ ["  end"]
   end
 

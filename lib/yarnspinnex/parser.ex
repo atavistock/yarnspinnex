@@ -70,6 +70,14 @@ defmodule Yarnspinnex.Parser do
 
     case Map.fetch(headers, "title") do
       {:ok, title} ->
+        if not Body.node_name?(title) do
+          raise CompileError,
+            line: first_line,
+            description:
+              "invalid node title #{inspect(title)}: use letters, digits, and underscores, " <>
+                "not starting with a digit"
+        end
+
         %Node{
           title: title,
           line: first_line,
