@@ -109,6 +109,10 @@ defmodule Yarnspinnex.ParserTest do
              ]
   end
 
+  test "an escaped quote inside a string does not end it for comment stripping" do
+    assert parse_body!("<<set $x = \"a\\\"b // c\">> // note") == [{:set, "x", "a\"b // c"}]
+  end
+
   test "directives accept padding inside their markers" do
     assert parse_body!(
              "<< set $x to 1 >>\n<< if $x gt 0 >>\n<< jump Start >>\n<< else >>\n<< stop >>\n<< endif >>"
