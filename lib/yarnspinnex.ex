@@ -104,7 +104,7 @@ defmodule Yarnspinnex do
   @doc "A cursor at the start node (`\"Start\"` if present, else the first node) holding `vars`."
   @spec start(Script.t(), Vars.vars()) :: Cursor.t()
   def start(%Script{} = script, vars \\ %{}) do
-    %Cursor{node: script.start_title, script: script.fingerprint, vars: Vars.normalize(vars)}
+    cursor_at(script, script.start_title, vars)
   end
 
   @doc "A cursor at the node titled `title` holding `vars`."
@@ -112,7 +112,7 @@ defmodule Yarnspinnex do
           {:ok, Cursor.t()} | {:error, :unknown_node}
   def enter(%Script{} = script, title, vars \\ %{}) do
     if Map.has_key?(script.nodes, title) do
-      {:ok, %Cursor{node: title, script: script.fingerprint, vars: Vars.normalize(vars)}}
+      {:ok, cursor_at(script, title, vars)}
     else
       {:error, :unknown_node}
     end
@@ -129,13 +129,13 @@ defmodule Yarnspinnex do
   defdelegate step(script, cursor, context \\ %{}), to: Interpreter
 
   @doc "Answers the option group `step/3` returned by picking the option at `index`."
-  @spec choose(Script.t(), Cursor.t(), non_neg_integer(), Vars.collection()) ::
+  @spec choose(Script.t(), Cursor.t(), term(), Vars.collection()) ::
           {:ok, Cursor.t()} | {:error, Interpreter.choose_error()}
   defdelegate choose(script, cursor, index, context \\ %{}), to: Interpreter
 
   @doc """
-  Whether `cursor` can be resumed against `script`: it was made from this exact version of the
-  script and points at a real position in it. Call this on a cursor loaded from storage to decide
+  Whether `cursor` can be resumed against `script`: its node is unchanged since the cursor was
+  made and it points at a real position in it. Call this on a cursor loaded from storage to decide
   between resuming and restarting; `step/3` performs the same check and raises instead.
   """
   @spec check_cursor(Script.t(), Cursor.t()) :: :ok | {:error, Interpreter.cursor_error()}
@@ -144,4 +144,12 @@ defmodule Yarnspinnex do
   @doc "Titles of every node in `script`."
   @spec node_titles(Script.t()) :: [String.t()]
   def node_titles(%Script{} = script), do: Map.keys(script.nodes)
+
+  defp cursor_at(script, title, vars) do
+    %Cursor{
+      node: title,
+      fingerprint: Map.fetch!(script.fingerprints, title),
+      vars: Vars.normalize(vars)
+    }
+  end
 end

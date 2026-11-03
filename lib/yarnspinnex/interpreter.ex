@@ -53,11 +53,11 @@ defmodule Yarnspinnex.Interpreter do
     end
   end
 
-  # Fingerprint, node, and well-formedness: the checks cheap enough to run on every step.
+  # Node, fingerprint, and well-formedness: the checks cheap enough to run on every step.
   defp check_identity(script, cursor) do
     cond do
-      cursor.script != script.fingerprint -> {:error, :stale_script}
       not Map.has_key?(script.nodes, cursor.node) -> {:error, :unknown_node}
+      cursor.fingerprint != script.fingerprints[cursor.node] -> {:error, :stale_script}
       not well_formed?(cursor) -> {:error, :invalid_position}
       true -> :ok
     end
@@ -77,15 +77,15 @@ defmodule Yarnspinnex.Interpreter do
 
   defp well_formed_entry?(_other), do: false
 
-  # What every step shares: the host's context and functions, checked once.
+  # What every step shares: the host's context as given (for host functions) and as `$name`
+  # lookups read it, and the host functions, checked once.
   defp env!(script, cursor, context) do
     case check_identity(script, cursor) do
       :ok -> :ok
       {:error, reason} -> raise located(cursor, nil, cursor_problem(reason))
     end
 
-    Vars.check_context!(context)
-    %{context: context, functions: script.functions}
+    %{context: context, names: Vars.lookup!(context), functions: script.functions}
   end
 
   defp cursor_problem(:stale_script),
@@ -241,7 +241,9 @@ defmodule Yarnspinnex.Interpreter do
   end
 
   defp exec({:jump, target, _line}, script, cursor, env, budget) do
-    do_step(script, %{cursor | node: target, path: [], index: 0}, env, budget - 1)
+    fingerprint = Map.fetch!(script.fingerprints, target)
+    cursor = %{cursor | node: target, fingerprint: fingerprint, path: [], index: 0}
+    do_step(script, cursor, env, budget - 1)
   end
 
   defp exec({:if, branches, _else_body, line}, script, cursor, env, budget) do
@@ -315,7 +317,7 @@ defmodule Yarnspinnex.Interpreter do
 
   # Host context wins over dialogue's own memory; the compiler rejects scripts that assign to it.
   defp eval_expr({:var, name}, scope) do
-    case Vars.fetch(scope.context, name) do
+    case Vars.fetch(scope.names, name) do
       {:ok, value} -> value
       :error -> Map.get(scope.vars, name)
     end

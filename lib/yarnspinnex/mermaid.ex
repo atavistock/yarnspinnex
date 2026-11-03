@@ -12,23 +12,6 @@ defmodule Yarnspinnex.Mermaid do
   @done_id "done"
   @done_label "end"
 
-  @precedence %{
-    xor: 0,
-    or: 1,
-    and: 2,
-    ==: 3,
-    !=: 3,
-    <: 4,
-    >: 4,
-    <=: 4,
-    >=: 4,
-    +: 5,
-    -: 5,
-    *: 6,
-    /: 6,
-    %: 6
-  }
-
   @typep state :: %{
            prefix: String.t(),
            counter: non_neg_integer(),
@@ -285,8 +268,8 @@ defmodule Yarnspinnex.Mermaid do
   defp parenthesize?(_ast, :postfix), do: true
 
   defp parenthesize?({:binop, op, _, _}, {parent_op, side}) do
-    child = Map.fetch!(@precedence, op)
-    parent = Map.fetch!(@precedence, parent_op)
+    child = Expression.precedence(op)
+    parent = Expression.precedence(parent_op)
     child < parent or (child == parent and side == :right)
   end
 

@@ -9,7 +9,7 @@ defmodule Yarnspinnex.Projection do
   defstruct fields: %{}, source: nil
 
   @type t :: %__MODULE__{
-          fields: %{optional(atom()) => term()},
+          fields: %{optional(atom() | String.t()) => term()},
           source: term()
         }
 

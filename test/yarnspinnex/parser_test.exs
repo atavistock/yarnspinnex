@@ -174,12 +174,18 @@ defmodule Yarnspinnex.ParserTest do
              parse_error("<<give {oops}>>")
   end
 
-  test "a bare command argument that parses as a call is checked like any other call" do
-    assert %CompileError{line: 3, description: "unknown or unsupported yarn function: gld"} =
-             parse_error("<<give gld()>>")
+  test "bare command arguments are text or numbers, never evaluated" do
+    assert parse_body!("<<move true gld() a-b -2 1.5 x.y \"q\">>") ==
+             [{:command, "move", ["true", "gld()", "a-b", -2, 1.5, "x.y", "q"]}]
 
-    assert %CompileError{line: 3, description: "dice takes 1 argument(s), given 0"} =
-             parse_error("<<roll dice()>>")
+    assert %CompileError{line: 3, description: "command argument $gold is not evaluated; " <> _} =
+             parse_error("<<give $gold>>")
+
+    assert %CompileError{line: 3, description: "malformed command argument: \"a\"+\"b\""} =
+             parse_error("<<give \"a\"+\"b\">>")
+
+    assert %CompileError{line: 3, description: "unknown or unsupported yarn function: gld"} =
+             parse_error("<<give {gld()}>>")
   end
 
   test "two directives on one line are an error; markers inside quotes are not" do

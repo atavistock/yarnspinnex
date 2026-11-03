@@ -7,6 +7,7 @@ defmodule Yarnspinnex.Parser.Body do
 
   alias Yarnspinnex.CompileError
   alias Yarnspinnex.Parser.Expression
+  alias Yarnspinnex.Parser.Lexer
 
   @typedoc "A raw source line paired with its 1-based line number."
   @type source_line :: {String.t(), pos_integer()}
@@ -50,6 +51,8 @@ defmodule Yarnspinnex.Parser.Body do
   @speaker_re ~r/^([^:{}\[\]<>\\]+?):\s+(.*)$/su
   @tags_re ~r/^(.*?)((?:\s+#\S+)+)$/
   @compound_operators %{?+ => :+, ?- => :-, ?* => :*, ?/ => :/, ?% => :%}
+  @integer_re ~r/^-?\d+$/
+  @float_re ~r/^-?\d+\.\d+$/
   @directive_keywords ~w(if elseif else endif set declare jump stop)
 
   @spec parse([source_line()], opts()) :: [statement()]
@@ -431,8 +434,9 @@ defmodule Yarnspinnex.Parser.Body do
     raise CompileError, description: "unterminated string in command"
   end
 
-  # `{expression}` is evaluated; a quoted or bare word that isn't an expression is passed as text.
-  # A token that parses as an expression is still checked, so a mistyped call is a compile error.
+  # `{expression}` is evaluated, a quoted string is unescaped, and a bare number is a number.
+  # Any other bare word is passed as text, never evaluated; a bare `$name` is refused because it
+  # reads like a variable but would arrive as the literal text.
   defp compile_arg("{" <> _ = token, opts) do
     if String.ends_with?(token, "}") do
       parse_expr!(binary_part(token, 1, byte_size(token) - 2), opts)
@@ -441,21 +445,26 @@ defmodule Yarnspinnex.Parser.Body do
     end
   end
 
-  defp compile_arg(token, opts) do
-    case parse_bare_arg(token) do
-      {:ok, ast} ->
-        check_calls!(ast, opts)
-        ast
-
-      :error ->
-        token
+  defp compile_arg("\"" <> _ = token, _opts) do
+    case Lexer.tokenize(token) do
+      [{:str, string}] -> string
+      _other -> raise CompileError, description: "malformed command argument: #{token}"
     end
   end
 
-  defp parse_bare_arg(token) do
-    {:ok, Expression.parse!(token)}
-  rescue
-    CompileError -> :error
+  defp compile_arg(<<?$, first, _::binary>> = token, _opts)
+       when first in ?a..?z or first in ?A..?Z or first == ?_ do
+    raise CompileError,
+      description:
+        "command argument #{token} is not evaluated; write {#{token}} to pass its value"
+  end
+
+  defp compile_arg(token, _opts) do
+    cond do
+      Regex.match?(@integer_re, token) -> String.to_integer(token)
+      Regex.match?(@float_re, token) -> String.to_float(token)
+      true -> token
+    end
   end
 
   # -- lines --------------------------------------------------------------------
@@ -481,31 +490,23 @@ defmodule Yarnspinnex.Parser.Body do
     ast
   end
 
-  defp check_calls!({:call, name, args}, opts) do
-    case Map.fetch(opts.calls, name) do
-      {:ok, arity} when length(args) == arity ->
-        :ok
+  defp check_calls!(ast, opts) do
+    for {:call, name, args} <- Expression.subexpressions(ast) do
+      case Map.fetch(opts.calls, name) do
+        {:ok, arity} when length(args) == arity ->
+          :ok
 
-      {:ok, arity} ->
-        raise CompileError,
-          description: "#{name} takes #{arity} argument(s), given #{length(args)}"
+        {:ok, arity} ->
+          raise CompileError,
+            description: "#{name} takes #{arity} argument(s), given #{length(args)}"
 
-      :error ->
-        raise CompileError, description: "unknown or unsupported yarn function: #{name}"
+        :error ->
+          raise CompileError, description: "unknown or unsupported yarn function: #{name}"
+      end
     end
 
-    Enum.each(args, &check_calls!(&1, opts))
+    :ok
   end
-
-  defp check_calls!({:binop, _op, left, right}, opts) do
-    check_calls!(left, opts)
-    check_calls!(right, opts)
-  end
-
-  defp check_calls!({:field, base, _field}, opts), do: check_calls!(base, opts)
-  defp check_calls!({:not, expr}, opts), do: check_calls!(expr, opts)
-  defp check_calls!({:neg, expr}, opts), do: check_calls!(expr, opts)
-  defp check_calls!(_leaf, _opts), do: :ok
 
   # -- interpolated text (used for both lines and option labels) ----------
 

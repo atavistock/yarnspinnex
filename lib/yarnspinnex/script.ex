@@ -2,21 +2,21 @@ defmodule Yarnspinnex.Script do
   @moduledoc """
   A parsed Yarn script ready to run: nodes indexed by title, which one `Yarnspinnex.start/2`
   should enter, the `Yarnspinnex.HostFunctions` module its calls resolve against, and a
-  fingerprint that cursors carry so a stale one is caught. Plain data - safe to cache (in ETS,
-  a map, wherever) across dialogue turns.
+  fingerprint per node that cursors carry so a stale one is caught. Plain data - safe to cache
+  (in ETS, a map, wherever) across dialogue turns.
   """
 
   alias Yarnspinnex.Analysis
   alias Yarnspinnex.CompileError
   alias Yarnspinnex.Node
 
-  @enforce_keys [:nodes, :start_title, :fingerprint]
-  defstruct [:nodes, :start_title, :fingerprint, :functions]
+  @enforce_keys [:nodes, :start_title, :fingerprints]
+  defstruct [:nodes, :start_title, :fingerprints, :functions]
 
   @type t :: %__MODULE__{
           nodes: %{optional(String.t()) => Node.t()},
           start_title: String.t(),
-          fingerprint: non_neg_integer(),
+          fingerprints: %{optional(String.t()) => non_neg_integer()},
           functions: module() | nil
         }
 
@@ -41,7 +41,7 @@ defmodule Yarnspinnex.Script do
        %__MODULE__{
          nodes: Map.new(nodes, &{&1.title, &1}),
          start_title: start_title(nodes),
-         fingerprint: fingerprint(nodes),
+         fingerprints: Map.new(nodes, &{&1.title, fingerprint(&1)}),
          functions: Keyword.get(opts, :functions)
        }}
     end
@@ -51,11 +51,11 @@ defmodule Yarnspinnex.Script do
     Enum.find(nodes, hd(nodes), &(&1.title == "Start")).title
   end
 
-  # Taken over the statements without their source lines, so comment and whitespace edits keep
-  # stored cursors valid while any change to a statement invalidates them.
-  defp fingerprint(nodes) do
-    nodes
-    |> Map.new(&{&1.title, Analysis.strip_lines(&1.body)})
+  # Taken per node over the statements without their source lines, so comment and whitespace
+  # edits keep stored cursors valid, and a change to one node leaves cursors in the others valid.
+  defp fingerprint(%Node{body: body}) do
+    body
+    |> Analysis.strip_lines()
     |> :erlang.phash2(@fingerprint_range)
   end
 

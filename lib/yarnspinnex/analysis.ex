@@ -1,94 +1,73 @@
 defmodule Yarnspinnex.Analysis do
   @moduledoc """
-  Static walks over parsed statements, for compile-time checks and tooling: jump targets and
-  variable reads, each paired with the source line they appear on, variable writes, and a
-  line-free view of the statements that a script's fingerprint is taken over.
+  Static walks over parsed statements, for compile-time checks and tooling. `bodies/1` is the one
+  place that knows how statements nest; `flatten/1` and the walks built on it follow from that.
   """
 
   alias Yarnspinnex.Parser.Body
+  alias Yarnspinnex.Parser.Expression
+
+  @doc "The statement lists nested directly inside `statement`: `<<if>>` branches, else, option bodies."
+  @spec bodies(Body.statement()) :: [[Body.statement()]]
+  def bodies({:if, branches, else_body, _line}) do
+    Enum.map(branches, fn {_condition, body} -> body end) ++ [else_body]
+  end
+
+  def bodies({:options, options, _line}) do
+    Enum.map(options, fn {:option, _parts, _condition, body, _tags, _line} -> body end)
+  end
+
+  def bodies(_statement), do: []
+
+  @doc "Every statement, depth first, including those nested in branches and options."
+  @spec flatten([Body.statement()]) :: [Body.statement()]
+  def flatten(statements) do
+    Enum.flat_map(statements, fn statement ->
+      [statement | Enum.flat_map(bodies(statement), &flatten/1)]
+    end)
+  end
+
+  @doc "The expressions `statement` evaluates itself, without nested statements, with their lines."
+  @spec expressions(Body.statement()) :: [{Expression.ast(), Body.line()}]
+  def expressions({:line, _speaker, parts, _tags, line}), do: part_expressions(parts, line)
+  def expressions({:set, _var, expr, line}), do: [{expr, line}]
+  def expressions({:declare, _var, expr, line}), do: [{expr, line}]
+  def expressions({:command, _name, args, line}), do: Enum.map(args, &{&1, line})
+
+  def expressions({:if, branches, _else_body, line}) do
+    Enum.map(branches, fn {condition, _body} -> {condition, line} end)
+  end
+
+  def expressions({:options, options, _line}) do
+    Enum.flat_map(options, fn {:option, parts, condition, _body, _tags, line} ->
+      conditions = if condition == nil, do: [], else: [{condition, line}]
+      part_expressions(parts, line) ++ conditions
+    end)
+  end
+
+  def expressions(_statement), do: []
+
+  defp part_expressions(parts, line), do: for({:expr, ast} <- parts, do: {ast, line})
 
   @doc "Every `<<jump>>` target, with its line, including inside options and `<<if>>` branches."
   @spec jump_targets([Body.statement()]) :: [{String.t(), Body.line()}]
-  def jump_targets(statements), do: Enum.flat_map(statements, &statement_jumps/1)
-
-  defp statement_jumps({:jump, target, line}), do: [{target, line}]
-
-  defp statement_jumps({:if, branches, else_body, _line}) do
-    Enum.flat_map(branches, fn {_condition, body} -> jump_targets(body) end) ++
-      jump_targets(else_body)
-  end
-
-  defp statement_jumps({:options, options, _line}) do
-    Enum.flat_map(options, fn {:option, _parts, _condition, body, _tags, _line} ->
-      jump_targets(body)
-    end)
-  end
-
-  defp statement_jumps(_other), do: []
+  def jump_targets(statements),
+    do: for({:jump, target, line} <- flatten(statements), do: {target, line})
 
   @doc "Every `$name` read, with the line of the statement reading it."
   @spec reads([Body.statement()]) :: [{String.t(), Body.line()}]
-  def reads(statements), do: Enum.flat_map(statements, &statement_reads/1)
-
-  defp statement_reads({:line, _speaker, parts, _tags, line}), do: parts_reads(parts, line)
-  defp statement_reads({:set, _var, expr, line}), do: expr_reads(expr, line)
-  defp statement_reads({:declare, _var, expr, line}), do: expr_reads(expr, line)
-
-  defp statement_reads({:command, _name, args, line}) do
-    Enum.flat_map(args, &expr_reads(&1, line))
+  def reads(statements) do
+    for statement <- flatten(statements),
+        {ast, line} <- expressions(statement),
+        {:var, name} <- Expression.subexpressions(ast),
+        do: {name, line}
   end
-
-  defp statement_reads({:if, branches, else_body, line}) do
-    Enum.flat_map(branches, fn {condition, body} -> expr_reads(condition, line) ++ reads(body) end) ++
-      reads(else_body)
-  end
-
-  defp statement_reads({:options, options, _line}) do
-    Enum.flat_map(options, fn {:option, parts, condition, body, _tags, line} ->
-      parts_reads(parts, line) ++ expr_reads(condition, line) ++ reads(body)
-    end)
-  end
-
-  defp statement_reads(_other), do: []
-
-  defp parts_reads(parts, line) do
-    Enum.flat_map(parts, fn
-      {:expr, ast} -> expr_reads(ast, line)
-      {:text, _text} -> []
-    end)
-  end
-
-  defp expr_reads(nil, _line), do: []
-  defp expr_reads({:var, name}, line), do: [{name, line}]
-  defp expr_reads({:field, base, _field}, line), do: expr_reads(base, line)
-  defp expr_reads({:call, _name, args}, line), do: Enum.flat_map(args, &expr_reads(&1, line))
-  defp expr_reads({:not, expr}, line), do: expr_reads(expr, line)
-  defp expr_reads({:neg, expr}, line), do: expr_reads(expr, line)
-
-  defp expr_reads({:binop, _op, left, right}, line) do
-    expr_reads(left, line) ++ expr_reads(right, line)
-  end
-
-  defp expr_reads(_literal, _line), do: []
 
   @doc "Every `$name` assigned by `<<set>>` or `<<declare>>`, anywhere in the statements."
   @spec writes([Body.statement()]) :: [String.t()]
-  def writes(statements), do: Enum.flat_map(statements, &statement_writes/1)
-
-  defp statement_writes({:set, var, _expr, _line}), do: [var]
-  defp statement_writes({:declare, var, _expr, _line}), do: [var]
-
-  defp statement_writes({:if, branches, else_body, _line}) do
-    Enum.flat_map(branches, fn {_condition, body} -> writes(body) end) ++ writes(else_body)
+  def writes(statements) do
+    for {kind, var, _expr, _line} <- flatten(statements), kind in [:set, :declare], do: var
   end
-
-  defp statement_writes({:options, options, _line}) do
-    Enum.flat_map(options, fn {:option, _parts, _condition, body, _tags, _line} ->
-      writes(body)
-    end)
-  end
-
-  defp statement_writes(_other), do: []
 
   @doc """
   The statements with their source lines removed. A script's fingerprint is taken over this, so

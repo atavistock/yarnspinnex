@@ -25,6 +25,19 @@ defmodule Yarnspinnex.ContextTest do
     end
   end
 
+  test "a keyword list is read at the top level of context only, first entry winning" do
+    assert TestRuntime.run(compile!("N: {$mood}"), context: [mood: "calm", mood: "angry"]).log ==
+             [{:line, "N", "calm"}]
+
+    assert_raise Yarnspinnex.RuntimeError, ~r/cannot access field "class"/, fn ->
+      TestRuntime.run(compile!("N: {$player.class}"), context: [player: [class: "mage"]])
+    end
+
+    assert_raise ArgumentError, ~r/context list must hold \{name, value\} pairs/, fn ->
+      TestRuntime.run(compile!("N: hi"), context: [1, 2])
+    end
+  end
+
   test "a struct is rejected as vars and as the whole context" do
     script = compile!("N: hi")
 

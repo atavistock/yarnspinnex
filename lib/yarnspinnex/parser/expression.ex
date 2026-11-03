@@ -23,11 +23,16 @@ defmodule Yarnspinnex.Parser.Expression do
           | {:neg, ast()}
           | {:binop, Ops.operator(), ast(), ast()}
 
+  # Binary operators from lowest precedence to highest; every level is left-associative.
+  @levels [[:xor], [:or], [:and], [:==, :!=], [:<, :>, :<=, :>=], [:+, :-], [:*, :/, :%]]
+  @precedence for {ops, level} <- Enum.with_index(@levels), op <- ops, into: %{}, do: {op, level}
+  @unary_level length(@levels)
+
   @spec parse!(String.t()) :: ast()
   def parse!(source) do
     source
     |> Lexer.tokenize()
-    |> parse_expression()
+    |> parse_level(0)
     |> case do
       {ast, []} ->
         ast
@@ -38,54 +43,40 @@ defmodule Yarnspinnex.Parser.Expression do
     end
   end
 
+  @doc "How tightly binary operator `op` binds: a higher number binds tighter."
+  @spec precedence(Ops.operator()) :: non_neg_integer()
+  def precedence(op), do: Map.fetch!(@precedence, op)
+
+  @doc "`ast` and every expression nested inside it, outermost first."
+  @spec subexpressions(ast()) :: [ast()]
+  def subexpressions(ast), do: [ast | Enum.flat_map(children(ast), &subexpressions/1)]
+
+  defp children({:field, base, _field}), do: [base]
+  defp children({:call, _name, args}), do: args
+  defp children({:not, operand}), do: [operand]
+  defp children({:neg, operand}), do: [operand]
+  defp children({:binop, _op, left, right}), do: [left, right]
+  defp children(_leaf), do: []
+
   # -- precedence-climbing parser ----------------------------------------
 
-  # Lowest precedence first: `xor`, then `or`, `and`, equality, ordering, additive, multiplicative.
-  defp parse_expression(tokens) do
-    {left, rest} = parse_or(tokens)
-    chain(rest, left, [:xor], &parse_or/1)
+  defp parse_level(tokens, @unary_level), do: parse_unary(tokens)
+
+  defp parse_level(tokens, level) do
+    {left, rest} = parse_level(tokens, level + 1)
+    chain(rest, left, level)
   end
 
-  defp parse_or(tokens) do
-    {left, rest} = parse_and(tokens)
-    chain(rest, left, [:or], &parse_and/1)
-  end
-
-  defp parse_and(tokens) do
-    {left, rest} = parse_equality(tokens)
-    chain(rest, left, [:and], &parse_equality/1)
-  end
-
-  defp parse_equality(tokens) do
-    {left, rest} = parse_relational(tokens)
-    chain(rest, left, [:==, :!=], &parse_relational/1)
-  end
-
-  defp parse_relational(tokens) do
-    {left, rest} = parse_additive(tokens)
-    chain(rest, left, [:<, :>, :<=, :>=], &parse_additive/1)
-  end
-
-  defp parse_additive(tokens) do
-    {left, rest} = parse_multiplicative(tokens)
-    chain(rest, left, [:+, :-], &parse_multiplicative/1)
-  end
-
-  defp parse_multiplicative(tokens) do
-    {left, rest} = parse_unary(tokens)
-    chain(rest, left, [:*, :/, :%], &parse_unary/1)
-  end
-
-  defp chain([{:op, op} | rest] = tokens, left, allowed, next_fn) do
-    if op in allowed do
-      {right, rest2} = next_fn.(rest)
-      chain(rest2, {:binop, op, left, right}, allowed, next_fn)
+  defp chain([{:op, op} | rest] = tokens, left, level) do
+    if Map.get(@precedence, op) == level do
+      {right, rest2} = parse_level(rest, level + 1)
+      chain(rest2, {:binop, op, left, right}, level)
     else
       {left, tokens}
     end
   end
 
-  defp chain(tokens, left, _allowed, _next_fn), do: {left, tokens}
+  defp chain(tokens, left, _level), do: {left, tokens}
 
   defp parse_unary([{:op, :not} | rest]) do
     {operand, rest2} = parse_unary(rest)
@@ -111,7 +102,7 @@ defmodule Yarnspinnex.Parser.Expression do
   defp parse_primary([{:var, name} | rest]), do: {{:var, name}, rest}
 
   defp parse_primary([:lparen | rest]) do
-    {inner, rest2} = parse_expression(rest)
+    {inner, rest2} = parse_level(rest, 0)
 
     case rest2 do
       [:rparen | rest3] -> {inner, rest3}
@@ -138,7 +129,7 @@ defmodule Yarnspinnex.Parser.Expression do
   defp parse_args([:rparen | rest], acc), do: {Enum.reverse(acc), rest}
 
   defp parse_args(tokens, acc) do
-    {arg, rest} = parse_expression(tokens)
+    {arg, rest} = parse_level(tokens, 0)
 
     case rest do
       [:comma | rest2] -> parse_args(rest2, [arg | acc])

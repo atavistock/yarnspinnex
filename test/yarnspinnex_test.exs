@@ -204,8 +204,11 @@ defmodule YarnspinnexTest do
       """)
 
     cursor = Yarnspinnex.start(script)
-    assert %Cursor{node: "Start", path: [], index: 0, vars: %{}, script: fingerprint} = cursor
-    assert fingerprint == script.fingerprint
+
+    assert %Cursor{node: "Start", path: [], index: 0, vars: %{}, fingerprint: fingerprint} =
+             cursor
+
+    assert fingerprint == script.fingerprints["Start"]
 
     assert {:line,
             %Line{speaker: "Sally", text: "Pick one.", tags: ["line:abc", "shout"], id: "abc"},
@@ -307,6 +310,31 @@ defmodule YarnspinnexTest do
     assert_raise Yarnspinnex.RuntimeError, ~r/different version of the script/, fn ->
       Yarnspinnex.step(v2, cursor)
     end
+  end
+
+  test "a cursor survives edits to other nodes and takes on each node's fingerprint as it jumps" do
+    other = "title: Other\n---\nN: in other\n===\n"
+    v1 = compile!("N: one\n-> A\n    <<jump Other>>\n-> B", other)
+    {:line, _, cursor} = Yarnspinnex.step(v1, Yarnspinnex.start(v1))
+    {:options, _, cursor} = Yarnspinnex.step(v1, cursor)
+
+    edited_other =
+      compile!("N: one\n-> A\n    <<jump Other>>\n-> B", other <> "title: New\n---\n===\n")
+
+    assert Yarnspinnex.check_cursor(edited_other, cursor) == :ok
+
+    {:ok, cursor} = Yarnspinnex.choose(v1, cursor, 0)
+    {:line, %Line{text: "in other"}, cursor} = Yarnspinnex.step(v1, cursor)
+    assert %Cursor{node: "Other", fingerprint: fingerprint} = cursor
+    assert fingerprint == v1.fingerprints["Other"]
+
+    edited_start = compile!("N: changed\n-> A\n    <<jump Other>>\n-> B", other)
+    assert Yarnspinnex.check_cursor(edited_start, cursor) == :ok
+
+    edited_target =
+      compile!("N: one\n-> A\n    <<jump Other>>\n-> B", "title: Other\n---\nN: edited\n===\n")
+
+    assert Yarnspinnex.check_cursor(edited_target, cursor) == {:error, :stale_script}
   end
 
   test "a corrupted cursor is refused rather than wrapping around" do
