@@ -26,11 +26,13 @@ defmodule Yarnspinnex.Interpreter do
   # declared stuck; a script that jumps in a circle without saying anything hits this.
   @max_transitions 1_000_000
 
+  @doc "Runs from `cursor` until the next line, command, option group, or end of the script."
   @spec step(Script.t(), Cursor.t(), Vars.collection()) :: event()
   def step(%Script{} = script, %Cursor{} = cursor, context \\ %{}) do
     do_step(script, cursor, env!(script, cursor, context), @max_transitions)
   end
 
+  @doc "Picks the option at `index` from the option group the cursor is paused on."
   @spec choose(Script.t(), Cursor.t(), term(), Vars.collection()) ::
           {:ok, Cursor.t()} | {:error, choose_error()}
   def choose(%Script{} = script, %Cursor{} = cursor, index, context \\ %{}) do
@@ -42,6 +44,7 @@ defmodule Yarnspinnex.Interpreter do
     end
   end
 
+  @doc "Checks that `cursor` points at a valid position in this version of `script`."
   @spec check_cursor(Script.t(), Cursor.t()) :: :ok | {:error, cursor_error()}
   def check_cursor(%Script{} = script, %Cursor{} = cursor) do
     with :ok <- check_identity(script, cursor),

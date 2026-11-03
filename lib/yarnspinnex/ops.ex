@@ -13,6 +13,7 @@ defmodule Yarnspinnex.Ops do
   @typedoc "Every binary operator an expression can contain; `and`, `or`, and `xor` are evaluated by the interpreter."
   @type operator :: :+ | :- | :* | :/ | :% | :== | :!= | :< | :> | :<= | :>= | :and | :or | :xor
 
+  @doc "Applies binary operator `op` to `left` and `right`, raising on unsupported operand types."
   @spec binop(operator(), term(), term()) :: term()
   def binop(:+, left, right), do: add(left, right)
   def binop(:-, left, right) when is_number(left) and is_number(right), do: left - right

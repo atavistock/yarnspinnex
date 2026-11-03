@@ -28,6 +28,7 @@ defmodule Yarnspinnex.Parser.Expression do
   @precedence for {ops, level} <- Enum.with_index(@levels), op <- ops, into: %{}, do: {op, level}
   @unary_level length(@levels)
 
+  @doc "Parses expression source into an AST, raising on invalid syntax."
   @spec parse!(String.t()) :: ast()
   def parse!(source) do
     source

@@ -34,6 +34,7 @@ defmodule Yarnspinnex.Parser.Lexer do
     "gte" => :>=
   }
 
+  @doc "Splits expression source into a list of tokens."
   @spec tokenize(String.t()) :: [token()]
   def tokenize(source) do
     source

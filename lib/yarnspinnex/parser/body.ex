@@ -55,6 +55,7 @@ defmodule Yarnspinnex.Parser.Body do
   @float_re ~r/^-?\d+\.\d+$/
   @directive_keywords ~w(if elseif else endif set declare jump stop)
 
+  @doc "Parses a node body's source lines into statements, raising `CompileError` on bad structure."
   @spec parse([source_line()], opts()) :: [statement()]
   def parse(raw_lines, opts) do
     case parse_statements(preprocess(raw_lines), 0, opts) do
