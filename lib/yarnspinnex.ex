@@ -122,7 +122,7 @@ defmodule Yarnspinnex do
   Advances to the next event: a line, a command, an option group, or the end of the dialogue.
 
   `context` is host state the script can read but not write; it is handed to
-  `Yarnspinnex.HostFunctions.call/3` untouched. Raises `Yarnspinnex.RuntimeError`, located at
+  `c:Yarnspinnex.HostFunctions.call/3` untouched. Raises `Yarnspinnex.RuntimeError`, located at
   the offending statement, when a statement cannot run or the cursor does not fit the script.
   """
   @spec step(Script.t(), Cursor.t(), Vars.collection()) :: Interpreter.event()

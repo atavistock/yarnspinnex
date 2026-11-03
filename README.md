@@ -4,7 +4,7 @@ Compiles [Yarn Spinner](https://www.yarnspinner.dev/) dialogue into a `Yarnspinn
 
 ```elixir
 def deps do
-  [{:yarnspinnex, github: "atavistock/yarnspinnex"}]
+  [{:yarnspinnex, "0.3"}]
 end
 ```
 
@@ -51,10 +51,8 @@ Sally: Your score is {$score}. #line:0a1b2c #shout
 -> Buy a pie <<if $gold >= 10>>
     <<spend_gold 10>>
 -> Leave
+    <<stop>>
 <<jump NextScene>>
-[[NextScene]]
-[[Say goodbye|NextScene]]
-<<stop>>
 ```
 
 - Speaker: everything before the first `: `. Write `\:` for a literal colon that does not start a speaker.
@@ -64,6 +62,7 @@ Sally: Your score is {$score}. #line:0a1b2c #shout
 - Option conditions: a trailing `<<if>>` sets `enabled?` but keeps the option in the list.
 - Option bodies: nested by indentation, after which the dialogue continues below the option group.
 - Jumps: a jump never returns, because there is no call stack. Targets must be literal node names, and titles must be valid jump targets (letters, digits, underscores).
+- Stop: `<<stop>>` ends the dialogue immediately, and `step/3` returns `{:done, cursor}`.
 - Commands: any other `<<...>>` is a command. Each argument is a bare number (a number), a quoted string, `{expr}` (evaluated), or any other bare word (passed as text, never evaluated). A bare `$name` is a compile error; write `{$name}`.
 - Padding: `<< set $x to 1 >>` parses here, but the reference compiler may reject it.
 
