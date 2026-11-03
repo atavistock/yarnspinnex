@@ -348,4 +348,28 @@ defmodule YarnspinnexTest do
 
     assert Exception.message(error) == "line 10 in node \"Other\": cannot apply > to nil and 5"
   end
+
+  test "arithmetic errors and host function failures are located like any other runtime error" do
+    for {body, message} <- [
+          {"N: {-$unset}", "line 3 in node \"Start\": cannot apply - to nil"},
+          {"N: {1 / 0}", "line 3 in node \"Start\": cannot apply / to 1 and 0: division by zero"},
+          {"N: {5 % 0.0}",
+           "line 3 in node \"Start\": cannot apply % to 5 and 0.0: division by zero"}
+        ] do
+      assert_raise Yarnspinnex.RuntimeError, message, fn -> TestRuntime.run(compile!(body)) end
+    end
+
+    {:ok, script} =
+      Yarnspinnex.compile_string("title: Start\n---\nN: {gold()}\n===\n",
+        functions: Yarnspinnex.TestFunctions
+      )
+
+    error =
+      assert_raise(Yarnspinnex.RuntimeError, fn ->
+        TestRuntime.run(script, context: %{player: %{}})
+      end)
+
+    assert %Yarnspinnex.RuntimeError{node: "Start", line: 3} = error
+    assert Exception.message(error) =~ "key :gold not found"
+  end
 end
