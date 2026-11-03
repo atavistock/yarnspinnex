@@ -174,6 +174,36 @@ defmodule Yarnspinnex.ParserTest do
              parse_error("<<give {oops}>>")
   end
 
+  test "a bare command argument that parses as a call is checked like any other call" do
+    assert %CompileError{line: 3, description: "unknown or unsupported yarn function: gld"} =
+             parse_error("<<give gld()>>")
+
+    assert %CompileError{line: 3, description: "dice takes 1 argument(s), given 0"} =
+             parse_error("<<roll dice()>>")
+  end
+
+  test "two directives on one line are an error; markers inside quotes are not" do
+    assert %CompileError{line: 3, description: "malformed statement: <<wait 1>> <<shake>>"} =
+             parse_error("<<wait 1>> <<shake>>")
+
+    assert %CompileError{line: 3, description: "malformed statement: <<set $x = 1>> text>>"} =
+             parse_error("<<set $x = 1>> text>>")
+
+    assert parse_body!("<<say \"a >> b << c\">>") == [{:command, "say", ["a >> b << c"]}]
+  end
+
+  test "a field name may be spelled like a keyword operator or boolean" do
+    assert parse_body!("{$p.is} {$p.or.true}") ==
+             [
+               {:line, nil,
+                [
+                  expr: {:field, {:var, "p"}, "is"},
+                  text: " ",
+                  expr: {:field, {:field, {:var, "p"}, "or"}, "true"}
+                ], []}
+             ]
+  end
+
   test "malformed directives are errors, never custom commands" do
     for text <- [
           "<<set $x>>",

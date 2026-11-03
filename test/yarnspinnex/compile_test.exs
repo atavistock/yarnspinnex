@@ -20,6 +20,13 @@ defmodule Yarnspinnex.CompileTest do
     assert Exception.message(error) == "line 5: duplicate node title: \"Start\""
   end
 
+  test "node titles must be names a jump can reach" do
+    for title <- ["My Node", "1st", "a-b", ""] do
+      assert %CompileError{line: 1, description: "invalid node title " <> _} =
+               error("title: #{title}\n---\nN: a\n===\n")
+    end
+  end
+
   test "jumps to unknown nodes are rejected wherever they are nested" do
     error = error("title: Start\n---\nN: a\n<<jump Nowhere>>\n===\n")
 

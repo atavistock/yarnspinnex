@@ -93,6 +93,13 @@ defmodule Yarnspinnex.Parser.Lexer do
   defp do_tokenize([?( | rest], acc), do: do_tokenize(rest, [:lparen | acc])
   defp do_tokenize([?) | rest], acc), do: do_tokenize(rest, [:rparen | acc])
   defp do_tokenize([?, | rest], acc), do: do_tokenize(rest, [:comma | acc])
+  # A field name is always an identifier, even one spelled like `is`, `or`, or `true`.
+  defp do_tokenize([?., char | rest], acc)
+       when char in ?a..?z or char in ?A..?Z or char == ?_ do
+    {name, rest2} = read_ident([char | rest], [])
+    do_tokenize(rest2, [{:ident, name}, :dot | acc])
+  end
+
   defp do_tokenize([?. | rest], acc), do: do_tokenize(rest, [:dot | acc])
 
   defp do_tokenize([char | _], _acc) do

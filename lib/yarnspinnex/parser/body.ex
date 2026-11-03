@@ -182,16 +182,28 @@ defmodule Yarnspinnex.Parser.Body do
 
   # -- directives -------------------------------------------------------------
 
-  # Splits `<< set $x = 1 >>` into `{:ok, "set", "$x = 1"}`; without the closing marker, `:error`.
+  # Splits `<< set $x = 1 >>` into `{:ok, "set", "$x = 1"}`. `:error` without the closing marker,
+  # or with another `<<` or `>>` outside quotes, which is two statements on one line.
   defp directive("<<" <> inner) do
-    if String.ends_with?(inner, ">>") do
-      body = inner |> binary_part(0, byte_size(inner) - 2) |> String.trim()
+    with true <- String.ends_with?(inner, ">>"),
+         body = inner |> binary_part(0, byte_size(inner) - 2) |> String.trim(),
+         false <- unquoted_marker?(body, false) do
       {keyword, args} = split_word(body)
       {:ok, keyword, args}
     else
-      :error
+      _other -> :error
     end
   end
+
+  defp unquoted_marker?(<<>>, _in_str), do: false
+
+  defp unquoted_marker?(<<?\\, _escaped, rest::binary>>, in_str),
+    do: unquoted_marker?(rest, in_str)
+
+  defp unquoted_marker?(<<?", rest::binary>>, in_str), do: unquoted_marker?(rest, not in_str)
+  defp unquoted_marker?(<<"<<", _rest::binary>>, false), do: true
+  defp unquoted_marker?(<<">>", _rest::binary>>, false), do: true
+  defp unquoted_marker?(<<_byte, rest::binary>>, in_str), do: unquoted_marker?(rest, in_str)
 
   # Takes the leading identifier off `text`, returning it with the trimmed remainder.
   defp split_word(text), do: split_word(text, [])
@@ -298,8 +310,12 @@ defmodule Yarnspinnex.Parser.Body do
     end
   end
 
+  @doc false
+  @spec node_name?(String.t()) :: boolean()
+  def node_name?(name), do: Regex.match?(@node_name_re, name)
+
   defp parse_jump(target, text, line) do
-    if Regex.match?(@node_name_re, target) do
+    if node_name?(target) do
       {:jump, target, line}
     else
       malformed("jump", text)
@@ -416,6 +432,7 @@ defmodule Yarnspinnex.Parser.Body do
   end
 
   # `{expression}` is evaluated; a quoted or bare word that isn't an expression is passed as text.
+  # A token that parses as an expression is still checked, so a mistyped call is a compile error.
   defp compile_arg("{" <> _ = token, opts) do
     if String.ends_with?(token, "}") do
       parse_expr!(binary_part(token, 1, byte_size(token) - 2), opts)
@@ -425,9 +442,20 @@ defmodule Yarnspinnex.Parser.Body do
   end
 
   defp compile_arg(token, opts) do
-    parse_expr!(token, opts)
+    case parse_bare_arg(token) do
+      {:ok, ast} ->
+        check_calls!(ast, opts)
+        ast
+
+      :error ->
+        token
+    end
+  end
+
+  defp parse_bare_arg(token) do
+    {:ok, Expression.parse!(token)}
   rescue
-    CompileError -> token
+    CompileError -> :error
   end
 
   # -- lines --------------------------------------------------------------------
