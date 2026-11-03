@@ -1,8 +1,8 @@
 defmodule Yarnspinnex.Ops do
   @moduledoc """
   Operator semantics for `Yarnspinnex.Interpreter`: `binop/3` for every binary operator except
-  `and`/`or` (those short-circuit in the interpreter), `get_field/2` for `.` access, and
-  `to_text/1` for how values render inside dialogue text.
+  `and`/`or` (those short-circuit in the interpreter), `negate/1` for unary minus, `get_field/2`
+  for `.` access, and `to_text/1` for how values render inside dialogue text.
 
   Dialogue reads scalars. A struct, map, or list reaching a comparison or a line of text is a
   missing projection in the host, and every path here says so rather than failing quietly.
@@ -17,6 +17,12 @@ defmodule Yarnspinnex.Ops do
   def binop(:+, left, right), do: add(left, right)
   def binop(:-, left, right) when is_number(left) and is_number(right), do: left - right
   def binop(:*, left, right) when is_number(left) and is_number(right), do: left * right
+
+  def binop(op, left, right) when op in [:/, :%] and is_number(left) and right == 0 do
+    raise ArgumentError,
+          "cannot apply #{op} to #{inspect(left)} and #{inspect(right)}: division by zero"
+  end
+
   def binop(:/, left, right) when is_number(left) and is_number(right), do: left / right
   def binop(:%, left, right) when is_integer(left) and is_integer(right), do: rem(left, right)
 
@@ -32,6 +38,14 @@ defmodule Yarnspinnex.Ops do
 
   def binop(op, left, right) do
     raise ArgumentError, "cannot apply #{op} to #{inspect(left)} and #{inspect(right)}"
+  end
+
+  @doc "Unary minus; raises on anything but a number."
+  @spec negate(term()) :: number()
+  def negate(value) when is_number(value), do: -value
+
+  def negate(value) do
+    raise ArgumentError, "cannot apply - to #{inspect(value)}"
   end
 
   @doc """

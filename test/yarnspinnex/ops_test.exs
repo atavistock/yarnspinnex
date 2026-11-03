@@ -21,6 +21,23 @@ defmodule Yarnspinnex.OpsTest do
     assert_raise ArgumentError, "cannot apply * to nil and 2", fn -> Ops.binop(:*, nil, 2) end
   end
 
+  test "division and remainder by zero raise with the operator and operands" do
+    assert_raise ArgumentError, "cannot apply / to 1 and 0: division by zero", fn ->
+      Ops.binop(:/, 1, 0)
+    end
+
+    assert_raise ArgumentError, "cannot apply % to 1.5 and 0.0: division by zero", fn ->
+      Ops.binop(:%, 1.5, 0.0)
+    end
+  end
+
+  test "negate flips a number and raises on anything else" do
+    assert Ops.negate(5) === -5
+    assert Ops.negate(-2.5) === 2.5
+    assert_raise ArgumentError, "cannot apply - to nil", fn -> Ops.negate(nil) end
+    assert_raise ArgumentError, "cannot apply - to \"a\"", fn -> Ops.negate("a") end
+  end
+
   test "remainder works on integers and floats" do
     assert Ops.binop(:%, 7, 3) === 1
     assert Ops.binop(:%, 5.5, 2) === 1.5

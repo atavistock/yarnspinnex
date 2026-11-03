@@ -287,11 +287,11 @@ defmodule Yarnspinnex.Interpreter do
     end)
   end
 
+  # Any exception, including one raised inside a host function, is relocated to the statement.
   defp guard(cursor, line, fun) do
     fun.()
   rescue
-    error in [ArgumentError, FunctionClauseError, UndefinedFunctionError] ->
-      reraise located(cursor, line, Exception.message(error)), __STACKTRACE__
+    error -> reraise located(cursor, line, Exception.message(error)), __STACKTRACE__
   end
 
   defp located(cursor, line, description) do
@@ -331,7 +331,7 @@ defmodule Yarnspinnex.Interpreter do
   end
 
   defp eval_expr({:not, expr}, scope), do: not Ops.boolean!(eval_expr(expr, scope))
-  defp eval_expr({:neg, expr}, scope), do: -eval_expr(expr, scope)
+  defp eval_expr({:neg, expr}, scope), do: Ops.negate(eval_expr(expr, scope))
 
   # `and` and `or` short-circuit, so the right side is evaluated only when it can matter.
   defp eval_expr({:binop, :and, left, right}, scope) do
