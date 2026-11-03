@@ -220,7 +220,10 @@ defmodule YarnspinnexTest do
 
     assert {:options, ^options, ^cursor} = Yarnspinnex.step(script, cursor)
 
-    assert {:error, :invalid_option} = Yarnspinnex.choose(script, cursor, 2)
+    for index <- [2, -1, "0", 0.0, nil] do
+      assert {:error, :invalid_option} = Yarnspinnex.choose(script, cursor, index)
+    end
+
     assert {:error, :option_disabled} = Yarnspinnex.choose(script, cursor, 1)
     assert {:ok, cursor} = Yarnspinnex.choose(script, cursor, 0)
 

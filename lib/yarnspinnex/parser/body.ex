@@ -92,6 +92,10 @@ defmodule Yarnspinnex.Parser.Body do
 
   defp find_comment_start([], _idx, _in_str), do: nil
 
+  # A backslash escapes the next grapheme, so `\"` never opens or closes a string.
+  defp find_comment_start(["\\", _escaped | rest], idx, in_str),
+    do: find_comment_start(rest, idx + 2, in_str)
+
   defp find_comment_start(["\"" | rest], idx, in_str),
     do: find_comment_start(rest, idx + 1, not in_str)
 

@@ -31,10 +31,9 @@ defmodule Yarnspinnex.Interpreter do
     do_step(script, cursor, env!(script, cursor, context), @max_transitions)
   end
 
-  @spec choose(Script.t(), Cursor.t(), non_neg_integer(), Vars.collection()) ::
+  @spec choose(Script.t(), Cursor.t(), term(), Vars.collection()) ::
           {:ok, Cursor.t()} | {:error, choose_error()}
-  def choose(%Script{} = script, %Cursor{} = cursor, index, context \\ %{})
-      when is_integer(index) and index >= 0 do
+  def choose(%Script{} = script, %Cursor{} = cursor, index, context \\ %{}) do
     env = env!(script, cursor, context)
 
     case remaining!(script, cursor) do
@@ -119,6 +118,10 @@ defmodule Yarnspinnex.Interpreter do
         exec(statement, script, cursor, env, budget)
     end
   end
+
+  # `Enum.at/2` counts a negative index from the end, so only a non-negative integer is looked up.
+  defp choose_from(_group, index, _cursor, _scope) when not (is_integer(index) and index >= 0),
+    do: {:error, :invalid_option}
 
   defp choose_from(group, index, cursor, scope) do
     case Enum.at(group, index) do

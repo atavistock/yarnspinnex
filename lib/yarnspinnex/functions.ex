@@ -34,8 +34,23 @@ defmodule Yarnspinnex.Functions do
   @doc "Calls built-in `name` with already-evaluated `args`; raises on an unknown name or arity."
   @spec call(String.t(), [term()]) :: term()
   def call("random", []), do: :rand.uniform()
-  def call("random_range", [low, high]), do: Enum.random(trunc(low)..trunc(high))
-  def call("dice", [sides]), do: Enum.random(1..trunc(sides))
+
+  def call("random_range", [low, high])
+      when is_number(low) and is_number(high) and trunc(low) <= trunc(high),
+      do: Enum.random(trunc(low)..trunc(high)//1)
+
+  def call("random_range", [low, high]) do
+    raise ArgumentError,
+          "random_range needs two numbers with low <= high, got #{inspect(low)} and #{inspect(high)}"
+  end
+
+  def call("dice", [sides]) when is_number(sides) and trunc(sides) >= 1,
+    do: Enum.random(1..trunc(sides)//1)
+
+  def call("dice", [sides]) do
+    raise ArgumentError, "dice needs a number of sides of at least 1, got #{inspect(sides)}"
+  end
+
   def call("round", [number]), do: round(number)
   def call("round_places", [number, places]), do: Float.round(number * 1.0, trunc(places))
   def call("floor", [number]), do: floor(number)
@@ -53,9 +68,17 @@ defmodule Yarnspinnex.Functions do
   def call("decimal", [number]), do: number - trunc(number)
   def call("string", [value]), do: Ops.to_text(value)
   def call("number", [value]) when is_binary(value), do: parse_number(value)
+  def call("number", [true]), do: 1
+  def call("number", [false]), do: 0
   def call("number", [value]), do: value
-  def call("bool", [value]) when is_binary(value), do: value == "true"
-  def call("bool", [value]), do: !!value
+  def call("bool", [value]) when is_binary(value), do: String.downcase(value) == "true"
+  def call("bool", [value]) when is_number(value), do: value != 0
+  def call("bool", [value]) when is_boolean(value), do: value
+  def call("bool", [nil]), do: false
+
+  def call("bool", [value]) do
+    raise ArgumentError, "cannot convert #{inspect(value)} to bool"
+  end
 
   def call(name, args) do
     raise ArgumentError, "unknown or unsupported yarn function: #{name}/#{length(args)}"

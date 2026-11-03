@@ -13,8 +13,26 @@ defmodule Yarnspinnex.FunctionsTest do
     assert Enum.all?(1..50, fn _ -> Functions.call("random_range", [2, 5]) in 2..5 end)
   end
 
+  test "random_range raises when the bounds are reversed or not numbers" do
+    assert_raise ArgumentError, ~r/random_range needs two numbers with low <= high/, fn ->
+      Functions.call("random_range", [5, 1])
+    end
+
+    assert_raise ArgumentError, ~r/random_range needs two numbers/, fn ->
+      Functions.call("random_range", ["a", 3])
+    end
+  end
+
   test "dice returns a value between 1 and the given sides" do
     assert Enum.all?(1..50, fn _ -> Functions.call("dice", [6]) in 1..6 end)
+  end
+
+  test "dice raises on fewer than one side" do
+    for sides <- [0, -3, 0.5, nil] do
+      assert_raise ArgumentError, ~r/dice needs a number of sides of at least 1/, fn ->
+        Functions.call("dice", [sides])
+      end
+    end
   end
 
   test "round, floor, and ceil" do
@@ -55,15 +73,31 @@ defmodule Yarnspinnex.FunctionsTest do
     assert Functions.call("number", [7]) === 7
   end
 
+  test "number converts booleans to 1 and 0" do
+    assert Functions.call("number", [true]) === 1
+    assert Functions.call("number", [false]) === 0
+  end
+
   test "number raises on a non-numeric string" do
     assert_raise ArgumentError, fn -> Functions.call("number", ["nope"]) end
   end
 
-  test "bool parses boolean strings and coerces other values" do
+  test "bool parses boolean strings in any case and treats zero as false" do
     assert Functions.call("bool", ["true"]) == true
+    assert Functions.call("bool", ["True"]) == true
     assert Functions.call("bool", ["false"]) == false
-    assert Functions.call("bool", [0]) == true
+    assert Functions.call("bool", [0]) == false
+    assert Functions.call("bool", [0.0]) == false
+    assert Functions.call("bool", [5]) == true
+    assert Functions.call("bool", [-1.5]) == true
+    assert Functions.call("bool", [false]) == false
     assert Functions.call("bool", [nil]) == false
+  end
+
+  test "bool raises on a value that is not a scalar" do
+    assert_raise ArgumentError, ~r/cannot convert %\{\} to bool/, fn ->
+      Functions.call("bool", [%{}])
+    end
   end
 
   test "unknown functions and wrong arities raise ArgumentError" do
